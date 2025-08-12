@@ -28,6 +28,23 @@ async def health_check() -> JSONResponse:
         headers={"Content-Type": "application/json"}
     )
 
+@app.get("/status")
+async def status_check() -> JSONResponse:
+    """
+    Alternative status check endpoint that returns system status.
+    Added as backup for environments that might interfere with /healthz.
+    """
+    return JSONResponse(
+        content={
+            "status": "healthy",
+            "service": "Financial Data API",
+            "version": "1.0.0",
+            "ok": True
+        },
+        status_code=200,
+        headers={"Content-Type": "application/json"}
+    )
+
 @app.post("/tool/get_confluence")
 async def get_confluence(request_body: Dict[str, Any] = {}) -> JSONResponse:
     """
@@ -92,6 +109,7 @@ async def root() -> JSONResponse:
             "version": "1.0.0",
             "endpoints": {
                 "health": "/healthz",
+                "status": "/status", 
                 "confluence": "/tool/get_confluence"
             }
         },
