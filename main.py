@@ -84,6 +84,19 @@ INDICATOR_ALIASES = {
     "new_addresses": "addresses_new",
     "transaction_count": "transactions_count",
     "tx_count": "transactions_count",
+    
+    # Additional common aliases
+    "aviv": "aviv-nupl",  # AVIV NUPL indicator
+    "nupl": "aviv-nupl",
+    "aviv_nupl": "aviv-nupl",
+    "nrpl": "realized_profit_loss_ratio",
+    "profit_loss": "coindays_in_profit",
+    "loss_profit": "coindays_in_loss",
+    
+    # Common abbreviations
+    "btc": "supply_circulating",
+    "market_cap": "marketcap",
+    "mcap": "marketcap",
 }
 
 # Create FastAPI instance
@@ -158,8 +171,8 @@ async def fetch_swagger_spec() -> Optional[Dict]:
         return SWAGGER_CACHE
 
 def normalize_indicator_name(name: str) -> str:
-    """Normalize indicator name for fuzzy matching"""
-    return re.sub(r'[_\-\s]+', '', name.lower())
+    """Normalize indicator name for fuzzy matching - lowercase, strip spaces/-/_"""
+    return re.sub(r'[_\-\s]+', '', name.lower().strip())
 
 def extract_indicators_from_swagger(swagger_data: Dict) -> Dict[str, IndicatorEntry]:
     """Extract indicator definitions from swagger specification"""
@@ -264,31 +277,43 @@ def resolve_indicator(indicator_name: str, visited: Optional[set] = None) -> Opt
     
     return None
 
-def find_similar_indicators(query: str, max_results: int = 20) -> List[Dict[str, str]]:
-    """Find indicators similar to the query"""
+def find_similar_indicators(query: str, max_results: int = 50) -> List[Dict[str, str]]:
+    """Find indicators similar to the query with improved scoring"""
     query_normalized = normalize_indicator_name(query)
+    query_lower = query.lower().strip()
     matches = []
     
     for name, entry in INDICATOR_INDEX.items():
         # Skip normalized duplicates for cleaner results
         if name == entry.data_field:  # Only show primary entries
             score = 0
+            name_lower = name.lower()
+            name_normalized = normalize_indicator_name(name)
             
-            # Exact match
-            if query.lower() == name.lower():
+            # Exact match (highest priority)
+            if query_lower == name_lower:
                 score = 100
-            # Starts with query
-            elif name.lower().startswith(query.lower()):
+            # Exact normalized match
+            elif query_normalized == name_normalized:
+                score = 95
+            # Starts with query (prefix match)
+            elif name_lower.startswith(query_lower):
+                score = 85
+            # Starts with normalized query
+            elif name_normalized.startswith(query_normalized):
                 score = 80
-            # Contains query
-            elif query.lower() in name.lower():
-                score = 60
-            # Normalized match
-            elif query_normalized in normalize_indicator_name(name):
-                score = 40
+            # Contains query (case-insensitive)
+            elif query_lower in name_lower:
+                score = 70
+            # Contains normalized query
+            elif query_normalized in name_normalized:
+                score = 65
             # Description match
-            elif query.lower() in entry.description.lower():
-                score = 20
+            elif query_lower in entry.description.lower():
+                score = 30
+            # Partial word match
+            elif any(query_lower in word for word in name_lower.split('_')):
+                score = 25
             
             if score > 0:
                 matches.append({
@@ -299,9 +324,27 @@ def find_similar_indicators(query: str, max_results: int = 20) -> List[Dict[str,
                     'score': score
                 })
     
-    # Sort by score and return top results
-    matches.sort(key=lambda x: x['score'], reverse=True)
+    # Sort by score (descending) and return top results
+    matches.sort(key=lambda x: (-x['score'], x['name']))  # Secondary sort by name for consistency
     return matches[:max_results]
+
+def get_all_indicators(max_results: int = 200) -> List[Dict[str, str]]:
+    """Get all indicators sorted by name"""
+    indicators = []
+    
+    for name, entry in INDICATOR_INDEX.items():
+        # Only include primary entries (not normalized duplicates)
+        if name == entry.data_field:
+            indicators.append({
+                'name': name,
+                'category': entry.category,
+                'data_field': entry.data_field,
+                'description': entry.description
+            })
+    
+    # Sort alphabetically by name
+    indicators.sort(key=lambda x: x['name'])
+    return indicators[:max_results]
 
 def validate_endpoint_path(path: str) -> bool:
     """Validate endpoint path for security"""
@@ -544,8 +587,13 @@ async def get_named_metrics(request: Request, named_request: NamedMetricsRequest
             indicator_entry = resolve_indicator(indicator_name)
             
             if not indicator_entry:
-                # Provide suggestions for unknown indicators
+                # Provide fuzzy fallback with top 5 suggestions
                 suggestions = find_similar_indicators(indicator_name, max_results=5)
+                # If no similar found, provide popular indicators as fallback
+                if not suggestions:
+                    popular_indicators = ["mvrv", "sopr", "supply_coinbase", "mvrv_sth", "sopr_sth"]
+                    suggestions = [{"name": name} for name in popular_indicators]
+                
                 results[indicator_name] = {
                     "error": {
                         "code": "UNKNOWN_INDICATOR",
@@ -622,43 +670,39 @@ async def get_named_metrics(request: Request, named_request: NamedMetricsRequest
     )
 
 @app.get("/tool/list_indicators")
-async def list_indicators(query: Optional[str] = None) -> JSONResponse:
+async def list_indicators(request: Request, query: Optional[str] = None) -> JSONResponse:
     """
     List available indicators with optional search query.
+    Returns top 200 indicators if no query, or up to 50 search results with scoring.
     """
-    if query:
-        # Search for matching indicators
-        matches = find_similar_indicators(query, max_results=20)
+    # Rate limiting
+    client_ip = get_client_ip(request)
+    if not check_rate_limit(client_ip):
+        raise HTTPException(
+            status_code=429, 
+            detail={"ok": False, "error": {"code": "RATE_LIMIT_EXCEEDED", "message": "Rate limit exceeded: 30 requests per minute"}}
+        )
+    
+    if query and query.strip():
+        # Search for matching indicators (up to 50 results)
+        matches = find_similar_indicators(query.strip(), max_results=50)
         return JSONResponse(
             content={
                 "ok": True,
-                "query": query,
-                "matches": matches,
-                "total_available": len(INDICATOR_INDEX)
+                "count": len(matches),
+                "items": matches
             },
             status_code=200,
             headers={"Content-Type": "application/json"}
         )
     else:
-        # Return overview of available indicators
-        categories = defaultdict(list)
-        
-        # Group indicators by category
-        for name, entry in INDICATOR_INDEX.items():
-            if name == entry.data_field:  # Only show primary entries
-                categories[entry.category].append({
-                    "name": name,
-                    "data_field": entry.data_field,
-                    "description": entry.description
-                })
-        
+        # Return top 200 indicators when no query provided
+        all_indicators = get_all_indicators(max_results=200)
         return JSONResponse(
             content={
                 "ok": True,
-                "total_indicators": len([k for k, v in INDICATOR_INDEX.items() if k == v.data_field]),
-                "categories": dict(categories),
-                "aliases_count": len(INDICATOR_ALIASES),
-                "usage": "Add ?query=<search_term> to search for specific indicators"
+                "count": len(all_indicators),
+                "items": all_indicators
             },
             status_code=200,
             headers={"Content-Type": "application/json"}
