@@ -1,6 +1,6 @@
 # Overview
 
-This project is a Financial Data API built with FastAPI that provides mock financial data endpoints. The application serves as a backend service that returns structured financial metrics and scores, likely designed to support financial analysis or trading applications. The API includes health check functionality and a confluence endpoint that returns mock Bitcoin-related financial indicators such as MVRV-Z scores and SOPR (Spent Output Profit Ratio) metrics.
+This project is a Financial Data API Proxy built with FastAPI that serves as a secure proxy for the ResearchBitcoin API. The application provides real Bitcoin metrics and financial data by securely forwarding requests to the ResearchBitcoin API while adding authentication, rate limiting, and security validation. The proxy is designed to enable ChatGPT Actions and other authorized clients to access real Bitcoin data without exposing API tokens.
 
 # User Preferences
 
@@ -12,16 +12,26 @@ Preferred communication style: Simple, everyday language.
 - **FastAPI**: Chosen as the web framework for its automatic API documentation, type hints support, and high performance. FastAPI provides built-in request/response validation and OpenAPI schema generation.
 
 ## API Design
-- **RESTful endpoints**: The application follows REST principles with clear endpoint naming (`/healthz` for health checks, `/tool/get_confluence` for data retrieval).
-- **JSON responses**: All endpoints return structured JSON responses with consistent formatting including status indicators and data payloads.
-- **Type hints**: Uses Python type hints for better code documentation and IDE support.
+- **Secure proxy architecture**: The application acts as a secure intermediary between clients and the ResearchBitcoin API
+- **Primary endpoint**: `/tool/get_metrics` - Accepts endpoint_path and query parameters, forwards to upstream API with injected authentication
+- **RESTful design**: Health checks at `/healthz` and `/status`, main proxy functionality at `/tool/get_metrics`
+- **JSON responses**: All endpoints return structured JSON with consistent `ok` status indicators and error handling
+- **Type validation**: Uses Pydantic models for request validation and type safety
 
 ## Cross-Origin Resource Sharing (CORS)
-- **Permissive CORS policy**: Currently configured to allow all origins, methods, and headers, making it suitable for development environments but requiring tightening for production use.
+- **Restrictive CORS policy**: Configured to allow specific origins including ChatGPT domains, localhost for testing, and Replit domains for development.
+- **Production security**: CORS is properly configured for production use with trusted origins only.
 
-## Data Structure
-- **Mock data approach**: The application returns hardcoded financial data rather than connecting to live data sources, suggesting this is either a development/testing setup or a prototype.
-- **Structured financial metrics**: Returns organized data with scores, components, and state indicators (neutral, bullish) for various financial indicators.
+## Security Features
+- **Rate limiting**: 30 requests per minute per IP address to prevent abuse
+- **Path validation**: Strict validation of endpoint paths to prevent path traversal attacks and ensure only valid ResearchBitcoin API paths are accessed
+- **Token security**: API tokens are read from environment variables and never accepted from clients or logged in responses
+- **Input sanitization**: All input parameters are validated using Pydantic models with proper type checking
+
+## Data Flow
+- **Real-time data**: The application forwards requests to the live ResearchBitcoin API and returns authentic Bitcoin metrics
+- **Secure proxy pattern**: Clients make requests to the proxy, which adds authentication and forwards to the upstream API
+- **Error handling**: Comprehensive error handling for upstream API failures, timeouts, and invalid responses
 
 ## Error Handling and Monitoring
 - **Health check endpoint**: Provides a simple health monitoring capability for deployment and orchestration systems.
@@ -30,20 +40,38 @@ Preferred communication style: Simple, everyday language.
 # External Dependencies
 
 ## Python Packages
-- **FastAPI**: Web framework for building the API
-- **uvicorn**: ASGI server for running the FastAPI application
-- **typing**: For type annotations and hints
+- **FastAPI**: Web framework for building the API with automatic OpenAPI documentation
+- **uvicorn**: ASGI server for running the FastAPI application in production
+- **httpx**: Async HTTP client for making requests to the ResearchBitcoin API
+- **pydantic**: Data validation and serialization using Python type hints
+- **typing**: Enhanced type annotations and hints for better code safety
 
 ## Runtime Requirements
 - **Python 3.7+**: Required for FastAPI compatibility
 - **ASGI server**: Uvicorn serves as the application server
 
 ## Development and Deployment
-- **No database dependencies**: Current implementation uses in-memory mock data
-- **No external API integrations**: All data is generated internally
-- **No authentication services**: Open API without authentication mechanisms
+- **No database dependencies**: Uses in-memory rate limiting storage (suitable for single-instance deployment)
+- **External API integration**: Secure integration with ResearchBitcoin API for real Bitcoin metrics
+- **Environment-based authentication**: API tokens managed through secure environment variables
+- **Production-ready**: Configured for deployment with proper error handling, timeouts, and security measures
 
 ## Recent Changes (August 12, 2025)
+
+### API Transformation - Secure ResearchBitcoin Proxy Implementation
+- **Complete architecture transformation**: Converted from mock data API to secure proxy for ResearchBitcoin API
+- **New primary endpoint**: Implemented `/tool/get_metrics` that securely proxies requests to https://api.researchbitcoin.net
+- **Authentication integration**: Added secure token injection from RESEARCHBITCOIN_TOKEN environment variable
+- **Security hardening**: 
+  - Rate limiting: 30 requests per minute per IP
+  - Path validation: Prevents path traversal and ensures only valid API paths
+  - Input sanitization: Strict validation of all parameters
+  - Token security: Never logs or exposes API tokens
+- **CORS restriction**: Updated from permissive to restrictive CORS policy allowing only ChatGPT domains and development origins
+- **Real data integration**: Successfully tested with live ResearchBitcoin API returning authentic Bitcoin supply distribution data
+- **Error handling**: Comprehensive error handling for upstream API failures, timeouts, and validation errors
+- **Added dependencies**: httpx for async HTTP requests, enhanced pydantic validation
+- **Production ready**: 10-second timeout, proper HTTP status codes, structured error responses
 
 ### Deployment Configuration Fixes - Latest Update
 - **Applied comprehensive deployment fixes**: Resolved deployment failures that were caused by undefined $file variable in run command:

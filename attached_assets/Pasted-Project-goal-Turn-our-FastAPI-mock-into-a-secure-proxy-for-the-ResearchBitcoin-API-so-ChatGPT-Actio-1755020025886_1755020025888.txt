@@ -1,0 +1,75 @@
+Project goal: Turn our FastAPI mock into a secure proxy for the ResearchBitcoin API so ChatGPT Actions can fetch real metrics.
+
+Create/modify endpoint: POST /tool/get_metrics
+Behavior:
+
+Read JSON body:
+
+endpoint_path (string, required)—path under https://api.researchbitcoin.net, e.g. /v1/supply_distribution/supply_coinbase
+
+query (object, optional)—forwarded as query params (e.g., date_field, output_format).
+
+Build the upstream URL: BASE_URL = "https://api.researchbitcoin.net" + endpoint_path.
+
+Inject secret token from environment—do not accept token from client. Use env var RESEARCHBITCOIN_TOKEN.
+
+Always add token=<env token> to query string.
+
+Default output_format to json if client didn’t provide it.
+
+Make a GET request upstream with a 10s timeout, header Accept: application/json.
+
+On success, return:
+
+json
+Copy
+Edit
+{
+  "ok": true,
+  "source": "<full upstream URL with query>",
+  "as_of": "<UTC ISO8601 now>",
+  "data": <upstream JSON as-is>
+}
+On error, return HTTP 502 with:
+
+json
+Copy
+Edit
+{"ok": false, "error": {"code": "UPSTREAM_ERROR", "message": "<reason>"}}
+Validation & safety:
+
+Reject if endpoint_path is missing or doesn’t start with /. Return 400.
+
+Disallow .. path traversal or full URLs. Only allow paths under the provider domain.
+
+Limit endpoint_path length (e.g., 200 chars).
+
+Only allow alphanum, /, _, and - in the path.
+
+Rate-limit to 30 req/min/IP (basic in-memory ok).
+
+CORS:
+
+Allow https://chat.openai.com and our test origin.
+
+Config:
+
+Read RESEARCHBITCOIN_TOKEN from environment.
+
+If missing at startup, log a warning.
+
+Keep existing:
+
+/status health endpoint should remain.
+
+Test plan (curl):
+
+curl -X POST https://<our-host>/tool/get_metrics -H "Content-Type: application/json" -d '{"endpoint_path":"/v1/supply_distribution/supply_coinbase","query":{"date_field":"2024-12-01"}}'
+
+Expect ok:true, data present, and source showing the upstream URL with the token (redact token in logs).
+
+Notes:
+
+Do not log the token.
+
+Timeouts 10s, catch and map errors (timeout, bad status).
