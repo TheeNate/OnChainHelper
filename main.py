@@ -7,7 +7,7 @@ import httpx
 import os
 import re
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import Any, Dict, Optional
 from collections import defaultdict
 
@@ -159,6 +159,13 @@ async def get_metrics(request: Request, metrics_request: MetricsRequest) -> JSON
     # Default output_format to json if not provided
     if "output_format" not in query_params:
         query_params["output_format"] = "json"
+    
+    # Default date_field to yesterday's date in UTC if missing or empty
+    # (ResearchBitcoin API requires dates up to yesterday only)
+    date_field = query_params.get("date_field")
+    if not date_field or (isinstance(date_field, str) and date_field.strip() == ""):
+        yesterday = datetime.now(timezone.utc) - timedelta(days=1)
+        query_params["date_field"] = yesterday.strftime("%Y-%m-%d")
     
     # Always add the token (from environment, not client)
     query_params["token"] = RESEARCHBITCOIN_TOKEN
