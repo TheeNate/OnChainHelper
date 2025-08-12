@@ -1,0 +1,56 @@
+Goal: Implement dynamic indicator resolution so the GPT can request metrics by friendly name.
+
+New/updated behavior in the proxy:
+
+On server start, fetch https://api.researchbitcoin.net/v1/swagger.json. Cache it in memory and refresh every 24h. If fetch fails, keep the last good copy.
+
+Build INDICATOR_INDEX from the Swagger:
+
+Walk all paths. For any path like /v1/<category>/{data_field} (or similar), extract the data_field enum list and descriptions from parameters/“Try it” blocks.
+
+For each enumerated data_field, create entries keyed by:
+
+the exact slug (e.g., mvrv_z),
+
+a normalized version (lowercase, underscores/hyphens stripped),
+
+and any synonyms we define in a static ALIASES dict.
+
+Store { endpoint_path, data_field, category, description }.
+
+POST /tool/get_named_metrics (you created the Action schema):
+
+Input: { "indicators": ["sth_sopr","mvrv_z"], "date_field": "YYYY-MM-DD" (optional), "window": "1d" (optional) }.
+
+For each indicator:
+
+Resolve via ALIASES → INDICATOR_INDEX (exact → normalized → fuzzy).
+
+If unresolved, return { error: { code: "UNKNOWN_INDICATOR", suggestions: [...] } } for that key.
+
+Build upstream URL using the resolved endpoint_path and data_field.
+
+Query params: always include token=<env>, default output_format=json; if date_field missing, use today UTC (YYYY-MM-DD); pass window only if the endpoint supports it.
+
+GET with 10s timeout.
+
+Response:
+
+json
+Copy
+Edit
+{
+  "ok": true,
+  "as_of": "<UTC ISO>",
+  "results": {
+    "sth_sopr": { "source": "<upstream URL w/o token>", "data": { ... } },
+    "mvrv_z":   { "source": "<upstream URL w/o token>", "data": { ... } }
+  }
+}
+If any upstream call fails, include { error: { code: "UPSTREAM_ERROR", message: "..." } } for that item but don’t fail the whole response.
+
+Diagnostics endpoint (optional): GET /tool/list_indicators?query=sth → returns top 20 matches from the index (name, category, data_field, description).
+
+Security: never log the provider token; rate-limit to 30 req/min/IP; reject absolute URLs/.. in paths.
+
+Notes: cache size small; if swagger fields differ from the example, be defensive when parsing. Log how many indicators were indexed.

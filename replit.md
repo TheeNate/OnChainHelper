@@ -58,6 +58,28 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes (August 12, 2025)
 
+### Dynamic Indicator Resolution System - Latest Major Feature
+- **Comprehensive indicator discovery**: Implemented automatic swagger spec fetching and parsing to build dynamic indicator index with 617 entries across multiple categories
+- **Friendly name resolution**: Added intelligent indicator resolution with exact, normalized, and alias matching for natural language requests
+- **New endpoint: `/tool/get_named_metrics`**: 
+  - Accepts friendly indicator names like "sth_sopr", "short_term_holder_sopr", "coinbase_supply"
+  - Automatically resolves to correct API endpoints and data fields
+  - Returns structured response with real data for each requested indicator
+  - Handles errors gracefully with helpful suggestions for unknown indicators
+- **New endpoint: `/tool/list_indicators`**: 
+  - Lists all available indicators grouped by category
+  - Provides search functionality with scoring and ranking
+  - Returns 308 unique indicators with descriptions and metadata
+- **Intelligent alias system**: Pre-configured aliases for common Bitcoin metrics:
+  - SOPR variants: "sth_sopr" → "sopr_sth", "lth_sopr" → "sopr_lth"
+  - Supply metrics: "coinbase_supply" → "supply_coinbase", "circulating_supply" → "supply_circulating"
+  - Market indicators: "mvrv" → "mvrv", with category-based resolution
+- **Automatic swagger caching**: 24-hour cache with automatic refresh, fallback to last good copy on fetch failures
+- **Production-ready error handling**: Comprehensive error codes, timeout protection, recursion prevention
+- **Security maintained**: All rate limiting, token security, and validation features preserved
+
+## Recent Changes (August 12, 2025)
+
 ### API Transformation - Secure ResearchBitcoin Proxy Implementation
 - **Complete architecture transformation**: Converted from mock data API to secure proxy for ResearchBitcoin API
 - **New primary endpoint**: Implemented `/tool/get_metrics` that securely proxies requests to https://api.researchbitcoin.net
