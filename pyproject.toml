@@ -1,9 +1,12 @@
 [project]
-name = "repl-nix-workspace"
-version = "0.1.0"
-description = "Add your description here"
+name = "financial-data-api"
+version = "1.0.0"
+description = "Financial Data API built with FastAPI that provides mock financial data endpoints"
 requires-python = ">=3.11"
 dependencies = [
     "fastapi>=0.116.1",
     "uvicorn>=0.35.0",
 ]
+
+[project.scripts]
+start = "uvicorn main:app --host 0.0.0.0 --port 5000"
