@@ -102,10 +102,10 @@ async def root() -> JSONResponse:
 if __name__ == "__main__":
     # Run the application on port 5000 for Replit compatibility
     # Bind to 0.0.0.0 to make it accessible externally
+    # Removed reload=True for production deployment compatibility
     uvicorn.run(
         "main:app",
         host="0.0.0.0",
         port=5000,
-        reload=True,
         log_level="info"
     )
