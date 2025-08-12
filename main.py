@@ -29,7 +29,7 @@ async def health_check() -> JSONResponse:
     )
 
 @app.post("/tool/get_confluence")
-async def get_confluence(request_body: Dict[str, Any] = None) -> JSONResponse:
+async def get_confluence(request_body: Dict[str, Any] = {}) -> JSONResponse:
     """
     Mock confluence endpoint that returns financial data.
     Ignores the request body and returns mock financial data as specified.
